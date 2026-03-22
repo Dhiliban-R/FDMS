@@ -60,7 +60,7 @@ export default function AnalyticsPage() {
   const handleExport = async () => {
     setExporting(true);
     try {
-      const exportData = await exportAnalyticsData(timeRange);
+      const exportData = await exportAnalyticsData('csv', { timeRange });
       
       // Create and download CSV
       const csvContent = generateCSV(exportData);

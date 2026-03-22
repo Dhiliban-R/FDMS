@@ -144,6 +144,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       
       // Set email verification status cookie
       Cookies.set('email_verified', isVerified ? 'true' : 'false', COOKIE_CONFIG);
+
+      // Set user role cookie for middleware
+      Cookies.set('user_role', user.role, COOKIE_CONFIG);
       
       // Store account creation time if available
       if (user.metadata?.creationTime) {
@@ -158,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Clear cookies when no user
       Cookies.remove('auth_token');
       Cookies.remove('email_verified');
+      Cookies.remove('user_role');
       Cookies.remove('verification_time');
       Cookies.remove('account_creation_time');
     }

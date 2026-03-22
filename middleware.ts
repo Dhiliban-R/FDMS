@@ -167,20 +167,30 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // TEMPORARILY DISABLE AUTH MIDDLEWARE FOR URGENT SUBMISSION
-  // TODO: Re-enable after submission
-  return response;
-
   // Check for auth token in cookies
   const authCookie = request.cookies.get('auth_token')?.value;
   const emailVerifiedCookie = request.cookies.get('email_verified')?.value;
   const accountCreationTime = request.cookies.get('account_creation_time')?.value;
+  const userRole = request.cookies.get('user_role')?.value;
   
   // If no auth token, redirect to login
   if (!authCookie) {
     const url = new URL('/auth/login', request.url);
     url.searchParams.set('from', path);
     return NextResponse.redirect(url);
+  }
+
+  // Role-Based Access Control (RBAC)
+  if (path.startsWith('/donor') && userRole !== 'donor' && userRole !== 'admin') {
+    return NextResponse.redirect(new URL('/unauthorized', request.url));
+  }
+  
+  if (path.startsWith('/recipient') && userRole !== 'recipient' && userRole !== 'admin') {
+    return NextResponse.redirect(new URL('/unauthorized', request.url));
+  }
+  
+  if (path.startsWith('/admin') && userRole !== 'admin') {
+    return NextResponse.redirect(new URL('/unauthorized', request.url));
   }
   
   // Get feature-specific requirements

@@ -10,9 +10,8 @@ import { StatsCard } from '@/components/ui/stats-card';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { DonationStatus, Donation } from '@/lib/types';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { useAuth } from '@/hooks/useAuth';
+import { getDonationsByDonorId, getDonorStats } from '@/lib/donation-service';
 import { Package, Clock, CheckCircle, AlertTriangle, Plus, User, Map, History } from 'lucide-react';
 import Link from 'next/link';
 import LoadingSpinner from '@/components/LoadingSpinner';
@@ -26,74 +25,34 @@ export default function DonorDashboardPage() {
     completed: 0,
     expired: 0
   });
+  const [trendData, setTrendData] = useState<{name: string, value: number}[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchDonorData = async () => {
+      if (!user?.uid) return;
+      
       try {
-        // For demo purposes, using mock data
-        // In production, this would fetch from Firestore based on the logged-in donor
-        const mockDonations = [
-          {
-            id: 'd1',
-            title: 'Fresh vegetables from local farm',
-            description: 'Various seasonal vegetables including carrots, lettuce, and tomatoes',
-            status: DonationStatus.ACTIVE,
-            createdAt: new Date('2025-05-20'),
-            expiryDate: new Date('2025-05-27'),
-            quantity: 25,
-            quantityUnit: 'kg',
-            reservedBy: null
-          },
-          {
-            id: 'd2',
-            title: 'Bakery items - day old bread and pastries',
-            description: 'Assorted bread loaves, rolls, and pastries from yesterday',
-            status: DonationStatus.RESERVED,
-            createdAt: new Date('2025-05-19'),
-            expiryDate: new Date('2025-05-22'),
-            quantity: 40,
-            quantityUnit: 'items',
-            reservedBy: 'Community Food Bank'
-          },
-          {
-            id: 'd3',
-            title: 'Canned soups and vegetables',
-            description: 'Various canned goods with at least 6 months shelf life',
-            status: DonationStatus.COMPLETED,
-            createdAt: new Date('2025-05-18'),
-            expiryDate: new Date('2025-11-18'),
-            quantity: 35,
-            quantityUnit: 'cans',
-            reservedBy: 'Hope Shelter'
-          },
-          {
-            id: 'd4',
-            title: 'Dairy products - milk and yogurt',
-            description: 'Fresh milk and yogurt with 5 days shelf life',
-            status: DonationStatus.EXPIRED,
-            createdAt: new Date('2025-05-15'),
-            expiryDate: new Date('2025-05-20'),
-            quantity: 15,
-            quantityUnit: 'liters',
-            reservedBy: null
-          }
-        ];
+        setLoading(true);
+        const [userDonations, userStats] = await Promise.all([
+          getDonationsByDonorId(user.uid),
+          getDonorStats(user.uid)
+        ]);
 
-        setDonations(mockDonations);
-
-        // Calculate stats
-        const total = mockDonations.length;
-        const active = mockDonations.filter(d => d.status === DonationStatus.ACTIVE).length;
-        const completed = mockDonations.filter(d => d.status === DonationStatus.COMPLETED).length;
-        const expired = mockDonations.filter(d => d.status === DonationStatus.EXPIRED).length;
+        setDonations(userDonations.slice(0, 5)); // Show only recent 5
 
         setStats({
-          total,
-          active,
-          completed,
-          expired
+          total: userStats.total,
+          active: userStats.active,
+          completed: userStats.completed,
+          expired: userStats.expired
         });
+
+        const mappedTrend = userStats.donationTrend.map(item => ({
+          name: item.date,
+          value: item.count
+        }));
+        setTrendData(mappedTrend);
 
         setLoading(false);
       } catch (error) {
@@ -102,27 +61,12 @@ export default function DonorDashboardPage() {
       }
     };
 
-    if (user) {
-      fetchDonorData();
-    }
+    fetchDonorData();
   }, [user]);
 
   if (loading) {
     return <LoadingSpinner />;
   }
-
-  // Data for donation trend chart
-  const donationTrendData = [
-    { date: 'Jan', count: 3 },
-    { date: 'Feb', count: 5 },
-    { date: 'Mar', count: 2 },
-    { date: 'Apr', count: 7 },
-    { date: 'May', count: 4 }
-  ].map(item => ({
-    name: item.date,
-    value: item.count
-  }));
-
 
   return (
     <div className="space-y-8">
@@ -218,7 +162,7 @@ export default function DonorDashboardPage() {
           </CardHeader>
           <CardContent>
             <AreaChart
-              data={donationTrendData}
+              data={trendData}
               xField="name"
               yField="value"
               height={250}
@@ -238,60 +182,72 @@ export default function DonorDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {donations.map((donation) => (
-                <Card key={donation.id} className="hover:shadow-md transition-all duration-300 border-gray-200">
-                  <CardContent className="p-4">
-                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-start justify-between mb-2">
-                          <h3 className="font-semibold text-lg text-gray-900">{donation.title}</h3>
-                          <StatusBadge status={donation.status} />
-                        </div>
-                        <p className="text-sm text-gray-600 mb-3">{donation.description}</p>
+              {donations.length > 0 ? (
+                donations.map((donation) => (
+                  <Card key={donation.id} className="hover:shadow-md transition-all duration-300 border-gray-200">
+                    <CardContent className="p-4">
+                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="flex items-start justify-between mb-2">
+                            <h3 className="font-semibold text-lg text-gray-900">{donation.title}</h3>
+                            <StatusBadge status={donation.status} />
+                          </div>
+                          <p className="text-sm text-gray-600 mb-3 line-clamp-2">{donation.description}</p>
 
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
-                          <div className="flex items-center gap-2">
-                            <Package className="h-4 w-4 text-gray-400" />
-                            <span className="text-gray-600">
-                              {donation.quantity} {donation.quantityUnit}
-                            </span>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-sm">
+                            <div className="flex items-center gap-2">
+                              <Package className="h-4 w-4 text-gray-400" />
+                              <span className="text-gray-600">
+                                {donation.quantity} {donation.quantityUnit}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-4 w-4 text-gray-400" />
+                              <span className="text-gray-600">
+                                Expires {donation.expiryDate.toLocaleDateString()}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-gray-400" />
+                              <span className="text-gray-600">
+                                {donation.reservedBy ? 'Reserved' : 'Available'}
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Clock className="h-4 w-4 text-gray-400" />
-                            <span className="text-gray-600">
-                              Expires {donation.expiryDate.toLocaleDateString()}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <User className="h-4 w-4 text-gray-400" />
-                            <span className="text-gray-600">
-                              {donation.reservedBy || 'No reservations'}
-                            </span>
-                          </div>
+                        </div>
+
+                        <div className="flex gap-2 lg:flex-col lg:w-32">
+                          <Button size="sm" variant="outline" className="flex-1 lg:w-full" asChild>
+                            <Link href={`/donor/donations/edit/${donation.id}`}>Edit</Link>
+                          </Button>
+                          <Button size="sm" variant="outline" className="flex-1 lg:w-full text-red-600 border-red-200 hover:bg-red-50">
+                            Delete
+                          </Button>
                         </div>
                       </div>
-
-                      <div className="flex gap-2 lg:flex-col lg:w-32">
-                        <Button size="sm" variant="outline" className="flex-1 lg:w-full">
-                          Edit
-                        </Button>
-                        <Button size="sm" variant="outline" className="flex-1 lg:w-full text-red-600 border-red-200 hover:bg-red-50">
-                          Delete
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                    </CardContent>
+                  </Card>
+                ))
+              ) : (
+                <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+                  <Package className="h-12 w-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500">You haven't made any donations yet.</p>
+                  <Button className="mt-4" asChild>
+                    <Link href="/donor/donations/new">Create Your First Donation</Link>
+                  </Button>
+                </div>
+              )}
             </div>
-            <div className="flex justify-center mt-6">
-              <Button variant="outline" className="gap-2 shadow-md" asChild>
-                <Link href="/donor/donations/active">
-                  <Package className="h-4 w-4" />
-                  View All Donations
-                </Link>
-              </Button>
-            </div>
+            {donations.length > 0 && (
+              <div className="flex justify-center mt-6">
+                <Button variant="outline" className="gap-2 shadow-md" asChild>
+                  <Link href="/donor/donations/active">
+                    <Package className="h-4 w-4" />
+                    View All Donations
+                  </Link>
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
 

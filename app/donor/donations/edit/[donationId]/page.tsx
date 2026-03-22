@@ -290,7 +290,12 @@ export default function EditDonationPage() {
 
       // Upload new images
       const newImageUrls: string[] = [];
-      const newFiles = Array.from(data.images || []).filter(file => file instanceof File) as File[];
+      const imagesField = data.images;
+      const newFiles: File[] = (imagesField instanceof FileList) 
+        ? Array.from(imagesField) 
+        : (Array.isArray(imagesField) 
+            ? (imagesField.filter((file: any) => file instanceof File) as unknown as File[])
+            : []);
 
       for (const file of newFiles) {
         // Generate a unique path for each image

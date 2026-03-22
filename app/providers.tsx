@@ -2,6 +2,7 @@
 
 import { ReactNode, Suspense } from 'react';
 import { AuthProvider } from '@/contexts/auth-context';
+import { LocationProvider } from '@/contexts/location-context';
 import { Toaster } from '@/components/ui/toaster';
 import { Toaster as SonnerToaster } from 'sonner';
 
@@ -20,16 +21,20 @@ function LoadingFallback() {
 
 export function Providers({ children }: ProvidersProps) {
   return (
-    <AuthProvider>
-      {children}
-      <Toaster />
-      <SonnerToaster
-        position="top-right"
-        richColors
-        closeButton
-        expand={false}
-        visibleToasts={5}
-      />
-    </AuthProvider>
+    <Suspense fallback={<LoadingFallback />}>
+      <AuthProvider>
+        <LocationProvider>
+          {children}
+          <Toaster />
+          <SonnerToaster
+            position="top-right"
+            richColors
+            closeButton
+            expand={false}
+            visibleToasts={5}
+          />
+        </LocationProvider>
+      </AuthProvider>
+    </Suspense>
   );
 }

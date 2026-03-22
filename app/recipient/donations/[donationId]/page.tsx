@@ -3,8 +3,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { toast } from 'sonner';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -16,6 +14,7 @@ import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious
 import Image from 'next/image';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { findDonationChatRoom, createDonationChatRoom } from '@/lib/chat-service';
+import { getDonationById, reserveDonation, completeDonation, getReservationByDonationId } from '@/lib/donation-service';
 import Link from 'next/link';
 
 export default function RecipientDonationDetailsPage() {
@@ -27,7 +26,6 @@ export default function RecipientDonationDetailsPage() {
   const [isReserving, setIsReserving] = useState(false);
   const [isCompleting, setIsCompleting] = useState(false);
   const [chatRoomId, setChatRoomId] = useState<string | null>(null);
-  const [isCreatingChat, setIsCreatingChat] = useState(false);
 
   useEffect(() => {
     const fetchDonation = async () => {
@@ -38,28 +36,19 @@ export default function RecipientDonationDetailsPage() {
       }
 
       try {
-        const docRef = doc(db, 'donations', donationId);
-        const docSnap = await getDoc(docRef);
+        setLoading(true);
+        const data = await getDonationById(donationId);
 
-        if (docSnap.exists()) {
-          const donationData = {
-            id: docSnap.id,
-            ...docSnap.data(),
-            createdAt: docSnap.data().createdAt?.toDate() || new Date(),
-            updatedAt: docSnap.data().updatedAt?.toDate() || new Date(),
-            expiryDate: docSnap.data().expiryDate?.toDate() || new Date(),
-            completedAt: docSnap.data().completedAt?.toDate() || null,
-            reservedAt: docSnap.data().reservedAt?.toDate() || null,
-          } as Donation;
-          setDonation(donationData);
+        if (data) {
+          setDonation(data);
         } else {
           toast.error('Donation not found.');
-          router.push('/recipient/donations/available'); // Redirect if donation not found
+          router.push('/recipient/donations/available');
         }
       } catch (err) {
         console.error('Error fetching donation:', err);
         toast.error('Failed to load donation details.');
-        router.push('/recipient/donations/available'); // Redirect on error
+        router.push('/recipient/donations/available');
       } finally {
         setLoading(false);
       }
@@ -91,14 +80,15 @@ export default function RecipientDonationDetailsPage() {
 
     setIsReserving(true);
     try {
-      const donationRef = doc(db, 'donations', donation.id);
-      await updateDoc(donationRef, {
-        status: 'reserved',
-        reservedBy: user.uid,
-        reservedAt: new Date(),
-        updatedAt: new Date(),
-      });
-      setDonation(prev => prev ? { ...prev, status: DonationStatus.RESERVED, reservedBy: user.uid, reservedAt: new Date() } : null);
+      await reserveDonation(
+        donation.id,
+        user.uid,
+        user.displayName || user.organizationName || 'Recipient'
+      );
+      
+      const updatedDonation = await getDonationById(donation.id);
+      setDonation(updatedDonation);
+      
       toast.success('Donation reserved successfully!');
 
       // Create chat room after successful reservation
@@ -112,7 +102,6 @@ export default function RecipientDonationDetailsPage() {
         setChatRoomId(chatRoom.id);
       } catch (chatError) {
         console.error('Error creating chat room:', chatError);
-        // Don't show error to user as reservation was successful
       }
     } catch (error) {
       console.error('Error reserving donation:', error);
@@ -123,19 +112,21 @@ export default function RecipientDonationDetailsPage() {
   };
 
   const handleCompleteDonation = async () => {
-    if (!user || !donation || donation.status !== 'reserved' || donation.reservedBy !== user.uid) return;
+    if (!user || !donation || donation.status !== DonationStatus.RESERVED || donation.reservedBy !== user.uid) return;
 
     setIsCompleting(true);
     try {
-      const donationRef = doc(db, 'donations', donation.id);
-      await updateDoc(donationRef, {
-        status: 'completed',
-        completedAt: new Date(),
-        updatedAt: new Date(),
-      });
-      setDonation(prev => prev ? { ...prev, status: DonationStatus.COMPLETED, completedAt: new Date() } : null);
+      const reservation = await getReservationByDonationId(donation.id);
+      
+      if (!reservation) {
+        throw new Error('Reservation not found');
+      }
+      
+      await completeDonation(donation.id, reservation.id);
+      
+      const updatedDonation = await getDonationById(donation.id);
+      setDonation(updatedDonation);
       toast.success('Donation marked as completed!');
-      // Optionally redirect or update UI
     } catch (error) {
       console.error('Error completing donation:', error);
       toast.error('Failed to mark donation as completed. Please try again.');
@@ -143,6 +134,7 @@ export default function RecipientDonationDetailsPage() {
       setIsCompleting(false);
     }
   };
+
 
   if (loading) {
     return <div className="flex items-center justify-center h-96">Loading donation details...</div>;

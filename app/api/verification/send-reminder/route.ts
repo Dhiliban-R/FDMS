@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
       });
       
       // Update reminder metrics
-      const remindersSentTodayUpdate = {};
+      const remindersSentTodayUpdate: any = {};
       remindersSentTodayUpdate[`remindersSentToday.${today}`] = (remindersSentToday || 0) + 1;
       
       // Update user document to record the reminder

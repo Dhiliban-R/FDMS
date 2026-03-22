@@ -5,16 +5,17 @@ import { useParams } from 'next/navigation';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Donation } from '@/lib/types';
+import { getDonationById } from '@/lib/donation-service';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { MapView } from '@/components/ui/map-view';
 import { format } from 'date-fns';
-import { Package, Calendar, MapPin, Clock, Image as ImageIcon, Pencil, MessageCircle } from 'lucide-react';
+import { Package, Calendar, MapPin, Clock, Image as ImageIcon, Pencil, MessageCircle, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel';
 import { findDonationChatRoom } from '@/lib/chat-service';
-import { useAuth } from '@/hooks/use-auth';
+import { useAuth } from '@/hooks/useAuth';
 
 export default function ViewDonationPage() {
   const { donationId } = useParams();
@@ -33,19 +34,11 @@ export default function ViewDonationPage() {
       }
 
       try {
-        const docRef = doc(db, 'donations', donationId);
-        const docSnap = await getDoc(docRef);
+        setLoading(true);
+        const data = await getDonationById(donationId);
 
-        if (docSnap.exists()) {
-          setDonation({
-            id: docSnap.id,
-            ...docSnap.data(),
-            createdAt: docSnap.data().createdAt?.toDate() || new Date(),
-            updatedAt: docSnap.data().updatedAt?.toDate() || new Date(),
-            expiryDate: docSnap.data().expiryDate?.toDate() || new Date(),
-            completedAt: docSnap.data().completedAt?.toDate() || null,
-            reservedAt: docSnap.data().reservedAt?.toDate() || null,
-          } as Donation);
+        if (data) {
+          setDonation(data);
         } else {
           setError('Donation not found.');
         }

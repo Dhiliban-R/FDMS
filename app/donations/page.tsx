@@ -1,9 +1,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { Donation, DonationStatus } from '@/lib/types';
+import { getAvailableDonations } from '@/lib/donation-service';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,19 +23,7 @@ export default function PublicDonationsPage() {
     const fetchDonations = async () => {
       setLoading(true);
       try {
-        const q = query(
-          collection(db, 'donations'),
-          where('status', '==', DonationStatus.ACTIVE),
-          orderBy('createdAt', 'desc')
-        );
-        const querySnapshot = await getDocs(q);
-        const fetchedDonations: Donation[] = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate(),
-          updatedAt: doc.data().updatedAt?.toDate(),
-          expiryDate: doc.data().expiryDate?.toDate(),
-        })) as Donation[];
+        const { donations: fetchedDonations } = await getAvailableDonations();
         setDonations(fetchedDonations);
       } catch (error) {
         console.error('Error fetching public donations:', error);

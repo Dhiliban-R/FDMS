@@ -103,10 +103,10 @@ const passwordFormSchema = z.object({
 
 // Schema for email preferences form
 const emailPreferencesSchema = z.object({
-  receiveNotifications: z.boolean().default(true),
-  emailFrequency: z.enum(["immediate", "daily", "weekly"]).default("immediate"),
-  marketingEmails: z.boolean().default(false),
-  receiveUpdates: z.boolean().default(true),
+  receiveNotifications: z.boolean(),
+  emailFrequency: z.enum(["immediate", "daily", "weekly"]),
+  marketingEmails: z.boolean(),
+  receiveUpdates: z.boolean(),
 });
 
 // Combined type for all form schemas

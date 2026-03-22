@@ -381,6 +381,29 @@ export const getReservationsByRecipientId = async (recipientId: string, status?:
   }
 };
 
+// Get a reservation by donation ID
+export const getReservationByDonationId = async (donationId: string) => {
+  try {
+    const q = query(
+      collection(db, 'reservations'),
+      where('donationId', '==', donationId),
+      where('status', '==', 'confirmed'),
+      limit(1)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    if (!querySnapshot.empty) {
+      const doc = querySnapshot.docs[0];
+      return { id: doc.id, ...doc.data() };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('Error getting reservation by donation ID:', error);
+    throw error;
+  }
+};
+
 // Subscribe to real-time updates for a specific donation
 export const subscribeToDonation = (donationId: string, callback: (donation: Donation | null) => void) => {
   const unsubscribe = onSnapshot(

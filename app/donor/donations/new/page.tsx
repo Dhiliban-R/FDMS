@@ -16,13 +16,12 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format } from 'date-fns';
 import { CalendarIcon, Loader2, ImagePlus, X, MapPin } from 'lucide-react';
-import { db, storage } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { db } from '@/lib/firebase';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { DonationStatus, Address } from '@/lib/types';
+import { DonationStatus } from '@/lib/types';
 import { useAppStore } from '@/store/store';
+import { createDonation, uploadDonationImages } from '@/lib/donation-service';
 
 // Define the form schema with Zod
 const formSchema = z.object({
@@ -41,6 +40,7 @@ const formSchema = z.object({
     latitude: z.number().optional(),
     longitude: z.number().optional(),
   }),
+  pickupInstructions: z.string().optional(),
   imageUrls: z.array(z.string()).optional(),
 });
 
@@ -104,6 +104,7 @@ export default function DonationForm() {
         latitude: user?.address?.latitude,
         longitude: user?.address?.longitude,
       },
+      pickupInstructions: '',
       imageUrls: [],
     }
   });
@@ -189,19 +190,6 @@ export default function DonationForm() {
     }
   };
 
-  // Upload images to Firebase Storage
-  const uploadImages = async (files: File[]): Promise<string[]> => {
-    if (files.length === 0) return [];
-    
-    const uploadPromises = files.map(async (file) => {
-      const storageRef = ref(storage, `donations/${user?.uid}/${Date.now()}_${file.name}`);
-      const snapshot = await uploadBytes(storageRef, file);
-      return getDownloadURL(snapshot.ref);
-    });
-    
-    return Promise.all(uploadPromises);
-  };
-
   // Form submission handler
   const onSubmit = async (data: FormValues) => {
     if (!user) {
@@ -212,27 +200,25 @@ export default function DonationForm() {
     setIsSubmitting(true);
     
     try {
-      // Upload images first
-      const imageUrls = await uploadImages(imageFiles);
+      // Upload images first using service
+      const imageUrls = await uploadDonationImages(user.uid, imageFiles);
       
-      // Prepare donation data
+      // Prepare donation data for service
       const donationData = {
         ...data,
         imageUrls,
         donorId: user.uid,
-        donorName: user.displayName,
+        donorName: user.displayName || user.organizationName || 'Donor',
         status: DonationStatus.ACTIVE,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       };
       
-      // Add to Firestore
-      const docRef = await addDoc(collection(db, 'donations'), donationData);
+      // Add using service
+      const donationId = await createDonation(donationData);
       
       toast.success('Donation created successfully!');
       
       // Redirect to donation details page
-      router.push(`/donor/donations/${docRef.id}`);
+      router.push(`/donor/donations/${donationId}`);
     } catch (error) {
       console.error('Error creating donation:', error);
       toast.error('Failed to create donation. Please try again.');
